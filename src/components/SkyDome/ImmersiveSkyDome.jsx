@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import * as Astronomy from 'astronomy-engine';
 import { computeStarPositions, starAltAz } from '../../astro/starPositions';
@@ -121,6 +121,76 @@ function createPlanetNameSprite(name) {
   return sprite;
 }
 
+function createTargetPointerTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const cx = 128, cy = 128;
+
+  ctx.clearRect(0, 0, 256, 256);
+
+  // Outer glowing target ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, 78, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255, 210, 122, 0.4)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Inner sharp reticle ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, 52, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255, 233, 199, 0.95)';
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  // 4 corner ticks pointing inward toward the center star
+  ctx.strokeStyle = '#ffd27a';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+
+  const tickDist = 92;
+  const innerDist = 60;
+
+  // Top
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - tickDist);
+  ctx.lineTo(cx, cy - innerDist);
+  ctx.stroke();
+
+  // Bottom
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + tickDist);
+  ctx.lineTo(cx, cy + innerDist);
+  ctx.stroke();
+
+  // Left
+  ctx.beginPath();
+  ctx.moveTo(cx - tickDist, cy);
+  ctx.lineTo(cx - innerDist, cy);
+  ctx.stroke();
+
+  // Right
+  ctx.beginPath();
+  ctx.moveTo(cx + tickDist, cy);
+  ctx.lineTo(cx + innerDist, cy);
+  ctx.stroke();
+
+  // Downward pointer arrow at the top pointing directly into the star
+  ctx.fillStyle = '#ffe9c7';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 38);
+  ctx.lineTo(cx - 10, cy - 54);
+  ctx.lineTo(cx + 10, cy - 54);
+  ctx.closePath();
+  ctx.fill();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+}
+
 const CELESTIAL_BODIES = [
   { body: Astronomy.Body.Sun, name: 'SUN', color: 0xffd27a, size: 0.75 },
   { body: Astronomy.Body.Moon, name: 'MOON', color: 0xd8d8e0, size: 0.75 },
@@ -188,7 +258,47 @@ function createBackgroundSphere() {
   return new THREE.Mesh(geometry, material);
 }
 
+/**
+ * Daytime atmospheric haze layer.
+ * Only covers the upper hemisphere (y >= 0) -- never below the horizon,
+ * so the bottom half stays completely dark, clearly indicating that the sun
+ * is above the horizon.
+ *
+ * Smooth gradient: pure white haze near the horizon (y = 0), slowly decreasing
+ * with altitude toward the zenith (y = radius).
+ * Additive blending provides a soft, luminous veil without washing out
+ * stars, constellations, planets, or labels.
+ */
+function createHazeDome() {
+  const radius = 65;
+  // thetaLength = Math.PI / 2 restricts the geometry strictly to the upper hemisphere (y >= 0)
+  const geometry = new THREE.SphereGeometry(radius, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+  const posAttr = geometry.attributes.position;
+  const colors = new Float32Array(posAttr.count * 3);
 
+  for (let i = 0; i < posAttr.count; i++) {
+    const y = posAttr.getY(i);
+    const t = Math.max(0, Math.min(1, y / radius)); // 0 at horizon, 1 at zenith
+    // White haze near the horizon, slowly decreasing with a smooth gradient toward zenith
+    const brightness = Math.pow(1 - t, 0.75);
+    colors[i * 3] = brightness;
+    colors[i * 3 + 1] = brightness;
+    colors[i * 3 + 2] = brightness;
+  }
+
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const material = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0, // Starts invisible at night, fades in when sun is above horizon
+    side: THREE.BackSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+  });
+
+  return new THREE.Mesh(geometry, material);
+}
 
 function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -254,8 +364,270 @@ export function ImmersiveSkyDome({
 
   const sunAltitudeRef = useRef(initialSun.altitude); // tracked each data update, read every frame to fade dust in/out
   const sunDirRef = useRef(initialSun.dir);
+  const hazeDomeRef = useRef(null);
   const planetTargetsRef = useRef([]);
   const starTargetsRef = useRef([]);
+
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const searchContainerRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const cameraRef = useRef(null);
+  const selectConstellationRef = useRef(null);
+  const targetPointerSpriteRef = useRef(null);
+  const pointerStartTimeRef = useRef(0);
+  const pointerActiveRef = useRef(false);
+
+  const showNameLabel = (name) => {
+    if (!labelRef.current) return;
+    labelRef.current.textContent = name;
+    labelRef.current.style.opacity = 1;
+    if (labelTimeoutRef.current) clearTimeout(labelTimeoutRef.current);
+    labelTimeoutRef.current = setTimeout(() => {
+      if (labelRef.current) labelRef.current.style.opacity = 0;
+    }, 4000);
+  };
+
+  const searchableCatalog = useMemo(() => {
+    if (!starsJson || !starNamesJson) return [];
+
+    const constMap = {};
+    if (constellationNamesJson) {
+      for (const f of constellationNamesJson.features) {
+        constMap[f.id] = f.properties?.name ?? f.id;
+      }
+    }
+
+    const items = [];
+
+    // Celestial bodies (Sun, Moon, Planets)
+    CELESTIAL_BODIES.forEach(({ body, name, color }) => {
+      const properName = name.charAt(0) + name.slice(1).toLowerCase();
+      items.push({
+        id: `body_${name}`,
+        name: properName,
+        properName,
+        constName: 'Solar System',
+        isPlanet: true,
+        body,
+        color,
+        mag: name === 'SUN' ? -26.7 : name === 'MOON' ? -12.7 : name === 'VENUS' ? -4.4 : name === 'JUPITER' ? -2.5 : 0.5,
+      });
+    });
+
+    for (const f of starsJson.features) {
+      const id = f.id;
+      const info = starNamesJson[id];
+      const coords = f.geometry.coordinates;
+      const mag = f.properties.mag;
+
+      let properName = '';
+      let bayer = '';
+      let flam = '';
+      let constCode = '';
+      let constName = '';
+
+      if (info) {
+        if (typeof info === 'string') {
+          properName = info.trim();
+        } else {
+          properName = (info.name || '').trim();
+          bayer = (info.bayer || '').trim();
+          flam = (info.flam || '').trim();
+          constCode = info.c || '';
+          constName = constMap[constCode] || constCode;
+        }
+      }
+
+      if (properName || bayer || flam || mag <= 4.0) {
+        let displayName = properName;
+        if (!displayName && bayer) {
+          displayName = `${bayer} ${constName || constCode}`.trim();
+        }
+        if (!displayName && flam) {
+          displayName = `${flam} ${constName || constCode}`.trim();
+        }
+        if (!displayName) {
+          displayName = `HIP ${id}`;
+        }
+
+        items.push({
+          id,
+          name: displayName,
+          properName,
+          bayer,
+          flam,
+          constName,
+          constCode,
+          raDeg: coords[0],
+          decDeg: coords[1],
+          mag,
+          isPlanet: false,
+        });
+      }
+    }
+
+    return items;
+  }, [starsJson, starNamesJson, constellationNamesJson]);
+
+  const suggestions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+
+    const matches = [];
+    for (const item of searchableCatalog) {
+      const pName = (item.properName || '').toLowerCase();
+      const name = (item.name || '').toLowerCase();
+      const cName = (item.constName || '').toLowerCase();
+      const hipStr = `hip ${item.id}`;
+
+      let score = 0;
+      if (pName === q) score = 100;
+      else if (pName.startsWith(q)) score = 80;
+      else if (pName.includes(q)) score = 60;
+      else if (name.startsWith(q)) score = 55;
+      else if (name.includes(q)) score = 40;
+      else if (hipStr.startsWith(q)) score = 45;
+      else if (cName.startsWith(q)) score = 30;
+      else if (cName.includes(q)) score = 20;
+
+      if (score > 0) {
+        const magBonus = Math.max(0, 10 - item.mag);
+        matches.push({ item, score: score + magBonus });
+      }
+    }
+
+    matches.sort((a, b) => b.score - a.score);
+    return matches.slice(0, 8).map((m) => m.item);
+  }, [searchQuery, searchableCatalog]);
+
+  const handleSelectStar = (item) => {
+    setIsSearchOpen(false);
+    setSearchQuery('');
+
+    let targetPos;
+    let targetSymbol = null;
+    let targetConstName = item.constName || '';
+
+    if (item.isPlanet) {
+      const planetMeta = planetsMetaRef.current.find(
+        (p) => p.name.toUpperCase() === item.name.toUpperCase()
+      );
+      if (planetMeta) {
+        targetPos = planetMeta.pos.clone();
+      } else {
+        const eq = Astronomy.Equator(item.body, time, observer, true, true);
+        const hz = Astronomy.Horizon(time, observer, eq.ra, eq.dec, 'normal');
+        targetPos = altAzToVector3(hz.altitude, hz.azimuth, SPHERE_RADIUS * 0.95);
+      }
+    } else {
+      const { altitude, azimuth } = starAltAz([item.raDeg, item.decDeg], observer, time);
+      targetPos = altAzToVector3(altitude, azimuth, SPHERE_RADIUS * 0.95);
+
+      const raHours = item.raDeg < 0 ? (item.raDeg + 360) / 15 : item.raDeg / 15;
+      const info = Astronomy.Constellation(raHours, item.decDeg);
+      if (info) {
+        targetSymbol = info.symbol;
+        if (!targetConstName) targetConstName = info.name;
+      }
+    }
+
+    if (targetSymbol && selectConstellationRef.current) {
+      selectConstellationRef.current(targetSymbol, targetConstName, false);
+      selectedConstellationSymbolRef.current = targetSymbol;
+      lastTappedStarIdRef.current = item.id;
+      showingStarNameRef.current = true;
+    } else {
+      lastTappedStarIdRef.current = item.id;
+      showingStarNameRef.current = true;
+    }
+
+    // Position and activate the target pointer reticle on the searched star
+    if (targetPointerSpriteRef.current) {
+      targetPointerSpriteRef.current.position.copy(targetPos);
+      targetPointerSpriteRef.current.visible = true;
+      targetPointerSpriteRef.current.material.opacity = 1;
+      pointerStartTimeRef.current = performance.now();
+      pointerActiveRef.current = true;
+    }
+
+    // Center camera smoothly directly on the target star with closer zoom
+    const targetQuat = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, -1),
+      targetPos.clone().normalize()
+    );
+    const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'YXZ');
+    const currentFov = cameraRef.current ? cameraRef.current.fov : 75;
+
+    cameraTweenRef.current = {
+      startYaw: yawRef.current,
+      startPitch: pitchRef.current,
+      targetYaw: targetEuler.y,
+      targetPitch: Math.max(-1.45, Math.min(1.45, targetEuler.x)),
+      startFov: currentFov,
+      targetFov: 26, // Zoom in closer to clearly isolate and separate overlapping stars
+      startTime: performance.now(),
+      duration: 900,
+    };
+
+    const displayName = targetConstName && !item.name.includes(targetConstName)
+      ? `${item.name} • ${targetConstName}`
+      : item.name;
+
+    showNameLabel(displayName);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (suggestions.length > 0) {
+        setSelectedSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (suggestions.length > 0) {
+        setSelectedSuggestionIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length);
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (suggestions.length > 0) {
+        const item = suggestions[selectedSuggestionIndex] || suggestions[0];
+        if (item) handleSelectStar(item);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsSearchOpen(false);
+      setSearchQuery('');
+    }
+  };
+
+  useEffect(() => {
+    if (!isSearchOpen) return;
+    function handleClickOutside(e) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setIsSearchOpen(false);
+      }
+    }
+    window.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isSearchOpen]);
+
+  useEffect(() => {
+    function handleGlobalKeyDown(e) {
+      if (e.key === '/' && !isSearchOpen && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+        setTimeout(() => searchInputRef.current?.focus(), 50);
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isSearchOpen]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -268,11 +640,30 @@ export function ImmersiveSkyDome({
     sceneRef.current = scene;
     scene.add(createBackgroundSphere());
 
+    const hazeDome = createHazeDome();
+    scene.add(hazeDome);
+    hazeDomeRef.current = hazeDome;
+
+    // Search target pointer reticle (points directly to searched star/planet)
+    const pointerTexture = createTargetPointerTexture();
+    const pointerMat = new THREE.SpriteMaterial({
+      map: pointerTexture,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+    });
+    const pointerSprite = new THREE.Sprite(pointerMat);
+    pointerSprite.scale.set(6, 6, 1);
+    pointerSprite.visible = false;
+    scene.add(pointerSprite);
+    targetPointerSpriteRef.current = pointerSprite;
+
 
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 200);
     camera.position.set(0, 0, 0);
     camera.rotation.order = 'YXZ';
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(width, height);
@@ -432,6 +823,10 @@ export function ImmersiveSkyDome({
     }
 
     function handleTap(e) {
+      if (pointerActiveRef.current) {
+        pointerActiveRef.current = false;
+        if (targetPointerSpriteRef.current) targetPointerSpriteRef.current.visible = false;
+      }
       const rect = renderer.domElement.getBoundingClientRect();
       const tapX = e.clientX - rect.left;
       const tapY = e.clientY - rect.top;
@@ -638,16 +1033,7 @@ export function ImmersiveSkyDome({
         activeCenteredSymbolRef.current = symbol;
       }
     }
-
-    function showNameLabel(name) {
-      if (!labelRef.current) return;
-      labelRef.current.textContent = name;
-      labelRef.current.style.opacity = 1;
-      if (labelTimeoutRef.current) clearTimeout(labelTimeoutRef.current);
-      labelTimeoutRef.current = setTimeout(() => {
-        if (labelRef.current) labelRef.current.style.opacity = 0;
-      }, 3000);
-    }
+    selectConstellationRef.current = selectConstellation;
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -667,6 +1053,10 @@ export function ImmersiveSkyDome({
         const eased = easeInOutCubic(progress);
         yawRef.current = lerpAngle(tween.startYaw, tween.targetYaw, eased);
         pitchRef.current = tween.startPitch + (tween.targetPitch - tween.startPitch) * eased;
+        if (tween.startFov !== undefined && tween.targetFov !== undefined) {
+          camera.fov = tween.startFov + (tween.targetFov - tween.startFov) * eased;
+          camera.updateProjectionMatrix();
+        }
         if (progress >= 1) cameraTweenRef.current = null;
       }
 
@@ -773,7 +1163,30 @@ export function ImmersiveSkyDome({
         colorAttr.needsUpdate = true;
       }
 
+      // Daytime white haze layer: invisible at night (opacity 0), smoothly fades in
+      // as the sun rises above the horizon, capped at a subtle daytime atmospheric wash.
+      if (hazeDomeRef.current) {
+        const dayFactor = Math.max(0, Math.min(1, sunAltitudeRef.current / 15));
+        hazeDomeRef.current.visible = dayFactor > 0;
+        hazeDomeRef.current.material.opacity = dayFactor * 0.22;
+      }
 
+      // Target pointer reticle animation & pulsing focus lock (reduced duration so star view is unobstructed quickly)
+      if (pointerActiveRef.current && targetPointerSpriteRef.current) {
+        const elapsed = (performance.now() - pointerStartTimeRef.current) / 1000;
+        if (elapsed > 1.4) {
+          const fade = Math.max(0, 1 - (elapsed - 1.4) / 0.3);
+          targetPointerSpriteRef.current.material.opacity = fade;
+          if (fade <= 0) {
+            targetPointerSpriteRef.current.visible = false;
+            pointerActiveRef.current = false;
+          }
+        } else {
+          const pulse = 1 + 0.08 * Math.sin(performance.now() * 0.006);
+          targetPointerSpriteRef.current.scale.set(6.2 * pulse, 6.2 * pulse, 1);
+          targetPointerSpriteRef.current.material.opacity = 1;
+        }
+      }
 
       renderer.render(scene, camera);
 
@@ -1040,7 +1453,7 @@ export function ImmersiveSkyDome({
       </div>
 
       {/* LAYER 2: Fixed Planetarium Top Header Overlay (Stationary & Independent) */}
-      <header className="app-header-still planetarium-fixed-header">
+      <header className={`app-header-still planetarium-fixed-header ${isSearchOpen ? 'search-active' : ''}`}>
         <div className="planetarium-header-group left-group">
           {onBackToMenu && (
             <button className="btn-menu-back" onClick={onBackToMenu}>
@@ -1050,6 +1463,101 @@ export function ImmersiveSkyDome({
               MENU
             </button>
           )}
+
+          <div className="search-bar-container" ref={searchContainerRef}>
+            {!isSearchOpen ? (
+              <button
+                className="btn-search-trigger"
+                onClick={() => {
+                  setIsSearchOpen(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 60);
+                }}
+                title="Search stars (Shortcut: /)"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <span>SEARCH</span>
+              </button>
+            ) : (
+              <div className="search-input-box">
+                <svg className="search-box-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  className="search-star-input"
+                  placeholder="Search stars (e.g. Sirius)..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSelectedSuggestionIndex(0);
+                  }}
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                />
+                {searchQuery && (
+                  <button
+                    className="btn-search-clear"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedSuggestionIndex(0);
+                      searchInputRef.current?.focus();
+                    }}
+                    title="Clear"
+                  >
+                    ✕
+                  </button>
+                )}
+                <button
+                  className="btn-search-close-x"
+                  onClick={() => {
+                    setIsSearchOpen(false);
+                    setSearchQuery('');
+                  }}
+                  title="Close (Esc)"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Suggestions auto-fill dropdown */}
+            {isSearchOpen && suggestions.length > 0 && (
+              <div className="search-suggestions-dropdown">
+                {suggestions.map((item, idx) => (
+                  <div
+                    key={item.id ?? item.name}
+                    className={`search-suggestion-item ${idx === selectedSuggestionIndex ? 'active' : ''}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelectStar(item);
+                    }}
+                    onMouseEnter={() => setSelectedSuggestionIndex(idx)}
+                  >
+                    <div className="suggestion-item-main">
+                      <span className="suggestion-name">{item.name}</span>
+                      {item.constName && (
+                        <span className="suggestion-const">{item.constName}</span>
+                      )}
+                    </div>
+                    <div className="suggestion-item-meta">
+                      {item.isPlanet ? (
+                        <span className="suggestion-pill planet-pill">PLANET</span>
+                      ) : (
+                        item.mag !== undefined && (
+                          <span className="suggestion-pill">MAG {item.mag.toFixed(1)}</span>
+                        )
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="header-location-spec">
             <span className="spec-label">OBSERVER LAT/LON:</span>
