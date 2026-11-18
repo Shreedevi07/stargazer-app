@@ -1,184 +1,590 @@
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
+/* Clean, Production-Grade Astronomical UI Styles */
 
-  &:hover {
-    border-color: var(--accent-border);
-  }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-}
-
-.hero {
+.stargazer-layout {
   position: relative;
-
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
-
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
-
-  .framework,
-  .vite {
-    position: absolute;
-  }
-
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
-
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
-}
-
-#center {
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--bg);
   display: flex;
   flex-direction: column;
-  gap: 25px;
-  place-content: center;
-  place-items: center;
-  flex-grow: 1;
-
-  @media (max-width: 1024px) {
-    padding: 32px 20px 24px;
-    gap: 18px;
-  }
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
-#next-steps {
+/* Subtle background architectural line grid */
+.grid-pattern-bg {
+  position: absolute;
+  inset: 0;
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  pointer-events: none;
+}
+
+/* Responsive Header Layout */
+.app-header {
+  position: sticky;
+  top: 0;
   display: flex;
-  border-top: 1px solid var(--border);
-  text-align: left;
-
-  & > div {
-    flex: 1 1 0;
-    padding: 32px;
-    @media (max-width: 1024px) {
-      padding: 24px 20px;
-    }
-  }
-
-  .icon {
-    margin-bottom: 16px;
-    width: 22px;
-    height: 22px;
-  }
-
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    text-align: center;
-  }
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg);
+  z-index: 1000;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-#docs {
-  border-right: 1px solid var(--border);
-
-  @media (max-width: 1024px) {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-}
-
-#next-steps ul {
-  list-style: none;
-  padding: 0;
+.header-brand {
   display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.header-time-loc {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Options Grid Container */
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Minimalist Option Card */
+.option-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.option-card:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-strong);
+}
+
+.option-card.featured {
+  border-color: rgba(212, 176, 122, 0.3);
+}
+
+.option-card.featured:hover {
+  border-color: rgba(212, 176, 122, 0.6);
+}
+
+/* Primary Button */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin: 32px 0 0;
-
-  .logo {
-    height: 18px;
-  }
-
-  a {
-    color: var(--text-h);
-    font-size: 16px;
-    border-radius: 6px;
-    background: var(--social-bg);
-    display: flex;
-    padding: 6px 12px;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
-    }
-    .button-icon {
-      height: 18px;
-      width: 18px;
-    }
-  }
-
-  @media (max-width: 1024px) {
-    margin-top: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-
-    li {
-      flex: 1 1 calc(50% - 8px);
-    }
-
-    a {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-  }
+  padding: 11px 20px;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: #090b0e;
+  background-color: var(--accent);
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-#spacer {
-  height: 88px;
-  border-top: 1px solid var(--border);
-  @media (max-width: 1024px) {
-    height: 48px;
-  }
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
-.ticks {
+/* Secondary Button */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text-primary);
+  background-color: transparent;
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+  border-color: #404854;
+}
+
+/* Icon / Nav Button */
+.btn-icon-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  max-width: 100%;
+}
+
+.btn-icon-nav:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--bg-surface-hover);
+}
+
+/* Status Tag / Badge */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tag.accent {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid rgba(212, 176, 122, 0.25);
+}
+
+.tag.muted {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Still Top Container Header for Dome & AR Views */
+.app-header-still {
+  flex-shrink: 0;
+  width: 100%;
+  min-height: 54px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  box-sizing: border-box;
+  z-index: 1000;
+  position: relative;
+  gap: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.btn-menu-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: #090b0e;
+  background-color: var(--accent);
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-menu-back:hover {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.header-location-spec {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.header-location-spec .spec-label {
+  color: var(--text-muted);
+}
+
+.header-location-spec .spec-value {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.heading-badge {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: #ffe9c7;
+  background: rgba(212, 176, 122, 0.12);
+  border: 1px solid rgba(212, 176, 122, 0.35);
+  padding: 4px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.mag-spec-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  padding: 4px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.header-time-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.header-time-display .time-val {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.header-time-display .date-val {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.dome-viewport-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+}
+
+/* Layer Separation & Fixed Overlays */
+.planetarium-viewport-wrapper {
   position: relative;
   width: 100%;
+  height: 100%;
+  background: #090b0e;
+  overflow: hidden;
+  touch-action: none;
+}
 
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
+/* Dedicated 3D Star Map Layer */
+.skydome-3d-layer {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  z-index: 1 !important;
+  touch-action: none !important;
+}
+
+/* Fixed Planetarium Header Overlay */
+.planetarium-fixed-header {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  z-index: 100 !important;
+  pointer-events: auto !important;
+  background: rgba(15, 18, 23, 0.94) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
+  padding-top: max(10px, env(safe-area-inset-top, 10px)) !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px 14px !important;
+  box-sizing: border-box !important;
+}
+
+.planetarium-header-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Fixed Selected Star Name Overlay */
+.selected-star-overlay-container {
+  position: fixed !important;
+  bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important;
+  left: 0 !important;
+  right: 0 !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  pointer-events: none !important;
+  z-index: 100 !important;
+  padding: 0 16px !important;
+  box-sizing: border-box !important;
+}
+
+.selected-star-badge {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  color: #ffe9c7;
+  text-shadow: 0 0 12px rgba(255, 180, 100, 0.8);
+  background: rgba(15, 18, 23, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 176, 122, 0.4);
+  padding: 8px 24px;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(212, 176, 122, 0.15);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+/* Floating Overlay Toolbar for Dome & AR */
+.overlay-toolbar {
+  position: fixed !important;
+  top: max(16px, env(safe-area-inset-top, 16px)) !important;
+  left: max(16px, env(safe-area-inset-left, 16px)) !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  pointer-events: auto !important;
+  background: rgba(15, 18, 23, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(212, 176, 122, 0.4) !important;
+  padding: 6px 12px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85), 0 0 16px rgba(212, 176, 122, 0.2) !important;
+}
+
+.overlay-toolbar .btn-icon-nav {
+  background: rgba(212, 176, 122, 0.15) !important;
+  border: 1px solid var(--accent) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  letter-spacing: 0.04em !important;
+  cursor: pointer !important;
+}
+
+.overlay-toolbar .btn-icon-nav:hover {
+  background: var(--accent) !important;
+  color: #090b0e !important;
+  border-color: var(--accent-hover) !important;
+}
+
+/* Footer Bar */
+.footer-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  background: var(--bg);
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: auto;
+  z-index: 10;
+}
+
+/* HUD Panel */
+.hud-panel {
+  background: rgba(15, 18, 23, 0.92);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 16px 20px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* Responsive Mobile Layout Adjustments */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 20px;
   }
 
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
+  .header-brand {
+    order: 1; /* 1. Title first */
+    width: 100%;
   }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
+
+  .header-time-loc {
+    order: 2;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .header-time {
+    order: 1; /* 2. Below title: Date and Time */
+    text-align: left !important;
+    width: 100%;
+  }
+
+  .header-location {
+    order: 2; /* 3. Below Date and Time: Location */
+    width: 100%;
+  }
+
+  .btn-icon-nav.header-loc-btn {
+    width: 100%;
+    justify-content: flex-start;
+    box-sizing: border-box;
+  }
+
+  .options-main {
+    padding: 24px 16px !important;
+  }
+
+  /* Prevent Options Card Overflow on Mobile */
+  .options-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+    width: 100% !important;
+  }
+
+  .option-card {
+    padding: 20px 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .footer-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 16px 20px !important;
+  }
+
+  /* Compact Still Top Header for Mobile View: multi-line wrapped layout */
+  .app-header-still,
+  .planetarium-fixed-header {
+    padding: max(8px, env(safe-area-inset-top, 8px)) 12px 8px 12px !important;
+    height: auto !important;
+    min-height: unset !important;
+    flex-wrap: wrap !important;
+    gap: 6px 10px !important;
+    justify-content: space-between !important;
+  }
+
+  .planetarium-header-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .planetarium-header-group.left-group {
+    order: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .planetarium-header-group.right-group {
+    order: 2;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+  }
+
+  .planetarium-header-group.center-group {
+    order: 3;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .btn-menu-back {
+    padding: 5px 10px !important;
+    font-size: 11px !important;
+    gap: 4px !important;
+  }
+
+  .header-location-spec {
+    font-size: 10px !important;
+  }
+
+  .header-location-spec .spec-label {
+    display: none !important;
+  }
+
+  .heading-badge, .mag-spec-badge {
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+  }
+
+  .header-time-display {
+    font-size: 10px !important;
+  }
+
+  .header-time-display .date-val {
+    display: none !important;
+  }
+
+  .selected-star-badge {
+    font-size: 13px !important;
+    padding: 6px 18px !important;
+    max-width: calc(100vw - 32px) !important;
   }
 }
